@@ -267,10 +267,54 @@ def arrange_and_pad(num1, num2):
     return A, B, first_larger, state
 
 
+def format (array):
+    num_arr = []
+    array_length = len(array)
+    for i in range(array_length - 1, 0, -1):
+        tmp = array_length - i + -1
+        if tmp % 3 == 0 and tmp != 0:
+            num_arr += [',']
+        num_arr += [str(array[i])]
+        p = 0
+    num_arr += [str(array[0])]
+    num_arr_reversed = [ele for ele in reversed(num_arr)]
+    num_str = ''
+    for num in num_arr_reversed:
+        num_str += num
+    return num_str
 
-    
-# testing operations
-for i in range(1000000):
-    if i % 10000 == 0:
-        print(str(i))
-    ret = test()
+txt=open('inputs.txt','r')
+lines=txt.readlines()
+for line in lines:
+    arguments=line.replace('\n','').split(' ')
+    if len(arguments)!=3:
+        print(str('invalid amount of arguments'),str(len(arguments)),'were given')
+        continue
+    if arguments[0]!='a' and  arguments[0]!='s':
+        print('did not use valid operation code')
+        continue
+    try:
+        numA = int(arguments[1])
+        numB =int(arguments[2])
+    except ValueError:
+        print("inputs not integers")
+        continue
+    number_A_array = convert_to_array(numA)
+    number_B_array = convert_to_array(numB)
+    op_code=arguments[0]
+    result, instruct = operation_handler(number_A_array, number_B_array, op_code=op_code)
+
+    formattedA=format(number_A_array)
+    formattedB=format(number_B_array)
+    formattedResult=format(result)
+    print(formattedA)
+    if op_code=='a':
+        print('plus')
+    elif op_code=='s':
+        print('mius')
+    else:
+        print("?")
+    print(formattedB)
+    print("equals")
+    print(formattedResult)
+    print("")
