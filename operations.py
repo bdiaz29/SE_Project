@@ -27,22 +27,26 @@ operation_dict = {
 
 # converts integer number into an array
 def convert_to_array(num_int):
+    dot_position = 0
     num_array = []
     # converts to sting
     str_int = str(num_int)
-    for char_int in str_int:
+    for i, char_int in enumerate(str_int):
         char = ord(char_int)
         # checks if it is a digit or not
-        if char >= 48 and char <= 57:
+        if char == 46:
+            dot_position = (len(str_int) - 1) - i
+        elif char >= 48 and char <= 57:
             # cast character into int
             tmp = int(char_int)
             num_array += [tmp]
         else:
             num_array += [char_int]
+
     # if negative sign not present insert positive sign
     if num_array[0] != '-':
         num_array.insert(0, '+')
-    return num_array
+    return num_array, dot_position
 
 
 # runs a test on a random operation
@@ -74,11 +78,11 @@ def test(upper_limit=10000000000):
         print("error:do not recognize operation")
         return False
     # convert number and real answer to arrays
-    number_1_array = convert_to_array(number_1)
-    number_2_array = convert_to_array(number_2)
-    answer_array = convert_to_array(answer)
+    number_1_array, dot_1 = convert_to_array(number_1)
+    number_2_array, dot_2 = convert_to_array(number_2)
+    answer_array, dot_3 = convert_to_array(answer)
     # pass arrays to operation handler and get result
-    result, instruct = operation_handler(number_1_array, number_2_array, op_code=op_code)
+    result, instruct = operation_handler(number_1_array, number_2_array, dot_1, dot_2, op_code=op_code)
     # compare result with real answer
     for i, ret in enumerate(result):
         r_actual = answer_array[i]
@@ -90,14 +94,20 @@ def test(upper_limit=10000000000):
 
 
 # takes an array and pads it with zeros until its in the desired length
-def zero_pad(desired_length, array):
+def zero_pad(desired_length, arr, pad_direction=True):
+    array = list(np.copy(arr))
     array_length = len(array)
     if array_length == desired_length:
         return array
     length_difference = abs(array_length - desired_length)
     zero_padding = list(np.zeros((length_difference), dtype=np.int))
-    zero_padding.extend(array)
-    return zero_padding
+    if pad_direction:
+        zero_padding.extend(array)
+        ans = zero_padding
+    else:
+        array.extend(zero_padding)
+        ans = array
+    return ans
 
 
 # removes the trailing zeros in front of array
@@ -105,6 +115,9 @@ def de_zero_pad(array):
     # iterativly remove zeros until it reaches a non zero value
     # or the length of the number and sign is two
     while True:
+        # if array has reach the .
+        if array[1] == '.':
+            break
         # if array plus its sign is as short as it can get
         # just return the zero
         if len(array) == 2:
@@ -121,12 +134,23 @@ def de_zero_pad(array):
 
 # handles the operations
 # default operation is add
-def operation_handler(A_, B_, op_code='a'):
+def operation_handler(a_in, b_in, dot_1, dot_2, op_code='a'):
     global operation_dict
     # create copy of original arrays since
     # operation may modify arrays
-    A = list.copy(A_)
-    B = list.copy(B_)
+    A = list.copy(a_in)
+    B = list.copy(b_in)
+    forward_pad_a = max(dot_2 - dot_1, 0)
+    forward_pad_b = max(dot_1 - dot_2, 0)
+    new_dot = 0
+
+    # pad to batch dots
+    A = zero_pad(len(A) + forward_pad_a, A, pad_direction=False)
+    B = zero_pad(len(B) + forward_pad_b, B, pad_direction=False)
+    if forward_pad_a >= forward_pad_b:
+        new_dot = dot_1 + forward_pad_a
+    else:
+        new_dot = dot_2 + forward_pad_b
     # call the arrange_and_pad function to properly format arrays
     # and get info of what state they are in
     A, B, first_larger, state = arrange_and_pad(A, B)
@@ -142,16 +166,17 @@ def operation_handler(A_, B_, op_code='a'):
     # perform operation
     result = operation(A, B, sub_op_code)
     result.insert(0, sign)
+    # result.insert((len(result)) - new_dot, '.')
     result = de_zero_pad(result)
-    return result, instructions
+    return result, new_dot
 
 
 # runs the operation on the arrays according to the opcodes
-def operation(A, B, op_code):
+def operation(a_in, b_in, op_code):
     if op_code == 'a':
-        result = add_arrays(A, B)
+        result = add_arrays(a_in, b_in)
     elif op_code == 's':
-        result = subtract_arrays(A, B)
+        result = subtract_arrays(a_in, b_in)
     else:
         print("invalid op code")
         result = None
@@ -160,16 +185,16 @@ def operation(A, B, op_code):
 
 # adds the two arrays together
 # sign is ignored since that is handles by the operation handler
-def add_arrays(A, B):
-    array_length = len(A)
+def add_arrays(a_in, b_in):
+    array_length = len(a_in)
     answer = []
     # the carry value originally a 0
     c = 0
     # arrays iterated backwards to perform arithmetic
     # in correct format
     for i in range(array_length - 1, -1, -1):
-        a = A[i]
-        b = B[i]
+        a = a_in[i]
+        b = b_in[i]
         ans = a + b + c
         # if addition cases a carry
         if ans > 9:
@@ -187,19 +212,19 @@ def add_arrays(A, B):
 
 # subtracts two arrays together
 # sign is ignored since that is handles by the operation handler
-def subtract_arrays(A, B):
-    array_length = len(A)
+def subtract_arrays(a_in, b_in):
+    array_length = len(a_in)
     answer = []
     # arrays iterated backwards to perform arithmetic
     # in correct format
     for i in range(array_length - 1, -1, -1):
-        a = A[i]
-        b = B[i]
+        a = a_in[i]
+        b = b_in[i]
         # if the digit is negative due to borrow
         # or if digit a is smaller than digit b initiate borrow operation
         if a < 0 or a < b:
             # subtract 1 due to borrow
-            A[i - 1] -= 1
+            a_in[i - 1] -= 1
             # add ten due to borrow
             a += 10
         ans = a - b
@@ -264,53 +289,80 @@ def arrange_and_pad(num1, num2):
                 B = zero_pad(max_len, num1)
                 first_larger = False
                 break
+    A = list(np.array(A, dtype=int))
+    B = list(np.array(B, dtype=int))
     return A, B, first_larger, state
 
 
-def format (array):
+# 1101.001
+def format(pre_array, dot):
     num_arr = []
-    array_length = len(array)
+    if dot != 0:
+        array_part_a = pre_array[0:-dot]
+        array_part_b = pre_array[-dot:len(pre_array)]
+    else:
+        array_part_a = pre_array
+        array_part_b = []
+
+    array_length = len(array_part_a)
     for i in range(array_length - 1, 0, -1):
         tmp = array_length - i + -1
         if tmp % 3 == 0 and tmp != 0:
             num_arr += [',']
-        num_arr += [str(array[i])]
-        p = 0
-    num_arr += [str(array[0])]
+        num_arr += [str(array_part_a[i])]
+    num_arr += [str(array_part_a[0])]
     num_arr_reversed = [ele for ele in reversed(num_arr)]
     num_str = ''
     for num in num_arr_reversed:
         num_str += num
+    num_str += '.'
+
+    for num in array_part_b:
+        num_str += str(num)
+
     return num_str
 
-txt=open('inputs.txt','r')
-lines=txt.readlines()
+
+def convert_float_rep(num):
+    spl = num.split('.')
+    if len(spl) < 2:
+        return int(num)
+    int_part = str(int(spl[0]))
+    # just to test its a number
+    dec_part = str(spl[1])
+
+    whole = int_part + '.' + dec_part
+    return whole
+
+
+txt = open('inputs.txt', 'r')
+lines = txt.readlines()
 for line in lines:
-    arguments=line.replace('\n','').split(' ')
-    if len(arguments)!=3:
-        print(str('invalid amount of arguments'),str(len(arguments)),'were given')
+    arguments = line.replace('\n', '').split(' ')
+    if len(arguments) != 3:
+        print(str('invalid amount of arguments'), str(len(arguments)), 'were given')
         continue
-    if arguments[0]!='a' and  arguments[0]!='s':
+    if arguments[0] != 'a' and arguments[0] != 's':
         print('did not use valid operation code')
         continue
     try:
-        numA = int(arguments[1])
-        numB =int(arguments[2])
+        numA = convert_float_rep(arguments[1])
+        numB = convert_float_rep(arguments[2])
     except ValueError:
-        print("inputs not integers")
+        print("inputs not numbers")
         continue
-    number_A_array = convert_to_array(numA)
-    number_B_array = convert_to_array(numB)
-    op_code=arguments[0]
-    result, instruct = operation_handler(number_A_array, number_B_array, op_code=op_code)
+    number_A_array, dot_A = convert_to_array(numA)
+    number_B_array, dot_B = convert_to_array(numB)
+    op_code = arguments[0]
+    result, dot_C = operation_handler(number_A_array, number_B_array, dot_A, dot_B, op_code=op_code)
 
-    formattedA=format(number_A_array)
-    formattedB=format(number_B_array)
-    formattedResult=format(result)
+    formattedA = format(number_A_array, dot_A)
+    formattedB = format(number_B_array, dot_B)
+    formattedResult = format(result, dot_C)
     print(formattedA)
-    if op_code=='a':
+    if op_code == 'a':
         print('plus')
-    elif op_code=='s':
+    elif op_code == 's':
         print('mius')
     else:
         print("?")
